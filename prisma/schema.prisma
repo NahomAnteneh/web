@@ -13,3 +13,263 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// User model for authentication
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  email     String   @unique
+  firstName String
+  lastName  String
+  roleId    Int
+  idNumber  String?  // ID number for institutional identification
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  role       Role         @relation(fields: [roleId], references: [id])
+  commits    Commit[]     @relation("author")
+  authoredCommits Commit[] @relation("committer")
+  groupLeader Group[]     @relation("groupLeader")
+  groupMemberships GroupMember[]
+  assignedTasks Task[]
+  feedback      Feedback[]
+  studentProfile StudentProfile? // Relation to StudentProfile
+
+  @@index([username])
+  @@index([email])
+}
+
+// Role model for user permissions
+model Role {
+  id         Int      @id @default(autoincrement())
+  roleName   String   @unique
+  permissions String  // JSON string representation of permissions
+
+  // Relations
+  users User[]
+}
+
+// Group model
+model Group {
+  id          Int      @id @default(autoincrement())
+  groupName   String
+  leaderId    Int      
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  leader       User          @relation("groupLeader", fields: [leaderId], references: [id])
+  members      GroupMember[]
+  projects     Project[]
+  tasks        Task[]
+}
+
+// GroupMember junction table
+model GroupMember {
+  groupId   Int
+  userId    Int
+  joinDate  DateTime @default(now())
+
+  // Relations
+  group     Group    @relation(fields: [groupId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@id([groupId, userId])
+}
+
+// Project model
+model Project {
+  id          Int      @id @default(autoincrement())
+  groupId     Int
+  projectName String
+  description String
+  startDate   DateTime
+  endDate     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  group        Group         @relation(fields: [groupId], references: [id])
+  repositories Repository[]
+  feedback     Feedback[]
+  mergeRequests MergeRequest[]
+}
+
+// Repository model
+model Repository {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  createdAt DateTime @default(now())
+
+  // Relations
+  project    Project   @relation(fields: [projectId], references: [id])
+  commits    Commit[]
+  files      File[]
+  branches   Branch[]
+  indexEntries IndexEntry[]
+}
+
+// Commit model
+model Commit {
+  id           String   @id // SHA-256 hash
+  repositoryId Int
+  authorId     Int
+  committerId  Int
+  message      String
+  commitTime   DateTime
+  treeId       String   // SHA-256 hash
+  author       String
+  committer    String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  repository   Repository     @relation(fields: [repositoryId], references: [id])
+  authorUser   User           @relation("author", fields: [authorId], references: [id])
+  committerUser User          @relation("committer", fields: [committerId], references: [id])
+  parents      CommitParent[] @relation("commit")
+  childCommits CommitParent[] @relation("parent")
+  branches     Branch[]
+  fileVersions FileVersion[]
+
+  @@index([repositoryId])
+}
+
+// CommitParent junction table
+model CommitParent {
+  commitId String
+  parentId String
+
+  // Relations
+  commit   Commit @relation("commit", fields: [commitId], references: [id])
+  parent   Commit @relation("parent", fields: [parentId], references: [id])
+
+  @@id([commitId, parentId])
+}
+
+// File model
+model File {
+  id           Int      @id @default(autoincrement())
+  repositoryId Int
+  filePath     String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  repository   Repository     @relation(fields: [repositoryId], references: [id])
+  versions     FileVersion[]
+
+  @@unique([repositoryId, filePath])
+}
+
+// FileVersion model
+model FileVersion {
+  id          Int      @id @default(autoincrement())
+  fileId      Int
+  commitId    String
+  contentHash String   // SHA-256 hash
+  createdAt   DateTime @default(now())
+
+  // Relations
+  file        File     @relation(fields: [fileId], references: [id])
+  commit      Commit   @relation(fields: [commitId], references: [id])
+}
+
+// Branch model
+model Branch {
+  id           Int      @id @default(autoincrement())
+  repositoryId Int
+  branchName   String
+  commitId     String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  repository   Repository     @relation(fields: [repositoryId], references: [id])
+  commit       Commit         @relation(fields: [commitId], references: [id])
+  sourceMergeRequests MergeRequest[] @relation("sourceBranch")
+  targetMergeRequests MergeRequest[] @relation("targetBranch")
+
+  @@unique([repositoryId, branchName])
+}
+
+// Task model
+model Task {
+  id          Int      @id @default(autoincrement())
+  groupId     Int
+  assignedTo  Int
+  description String
+  deadline    DateTime
+  status      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  group       Group    @relation(fields: [groupId], references: [id])
+  assignee    User     @relation(fields: [assignedTo], references: [id])
+}
+
+// Feedback model
+model Feedback {
+  id           Int      @id @default(autoincrement())
+  projectId    Int
+  userId       Int
+  feedbackText String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  project      Project  @relation(fields: [projectId], references: [id])
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+// MergeRequest model
+model MergeRequest {
+  id              Int      @id @default(autoincrement())
+  projectId       Int
+  targetBranchId  Int
+  sourceBranchId  Int
+  status          String
+  description     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  project       Project  @relation(fields: [projectId], references: [id])
+  targetBranch  Branch   @relation("targetBranch", fields: [targetBranchId], references: [id])
+  sourceBranch  Branch   @relation("sourceBranch", fields: [sourceBranchId], references: [id])
+}
+
+// IndexEntry model
+model IndexEntry {
+  id           Int      @id @default(autoincrement())
+  repositoryId Int
+  mode         Int
+  filePath     String
+  sha256       String
+  fileSize     Int
+  mTime        DateTime
+  stage        Int
+  baseSha      String?
+  ourSha       String?
+  theirSha     String?
+  createdAt    DateTime @default(now())
+
+  // Relations
+  repository   Repository @relation(fields: [repositoryId], references: [id])
+
+  @@unique([repositoryId, filePath, stage])
+}
+
+// StudentProfile model for student-specific data
+model StudentProfile {
+  id         Int     @id @default(autoincrement())
+  userId     Int     @unique
+  department String
+  batchYear  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

@@ -6,27 +6,84 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { motion } from "framer-motion";
-import { UserCircle, Mail, BookOpen, Users, ClipboardList, Lock } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  UserCircle,
+  Mail,
+  BookOpen,
+  Users,
+  Lock,
+  School,
+  Calendar,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  Building,
+  GraduationCap,
+  UserCog
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
+// Generate years for batch selection (current year + 6 future years)
+const generateBatchYears = () => {
+  const currentYear = new Date().getFullYear();
+  const years = [];
+  for (let i = 0; i < 7; i++) {
+    years.push(currentYear + i);
+  }
+  return years;
+};
+
+// List of departments
+const departments = [
+  "Computer Science",
+  "Software Engineering",
+  "Information Systems",
+  "Information Technology",
+  "Computer Engineering",
+  "Electrical Engineering",
+  "Mechanical Engineering",
+  "Civil Engineering",
+  "Chemical Engineering",
+  "Biomedical Engineering",
+];
 
 export default function RegisterPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [isStudent, setIsStudent] = useState(false);
   const [formData, setFormData] = useState({
     username: "",
     email: "",
     password: "",
     confirmPassword: "",
-    role: "student", // Default role
+    firstName: "",
+    lastName: "",
+    idNumber: "",
+    department: "",
+    batchYear: "",
+    role: "", // No default role, user must select
   });
   const [formErrors, setFormErrors] = useState({
     username: "",
     email: "",
     password: "",
     confirmPassword: "",
-    role: "",
+    firstName: "",
+    lastName: "",
+    idNumber: "",
+    department: "",
+    batchYear: "",
+    role: "", // Add back role validation
     general: "",
   });
 
@@ -40,30 +97,37 @@ export default function RegisterPage() {
     }
   };
 
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (formErrors[name as keyof typeof formErrors]) {
+      setFormErrors(prev => ({ ...prev, [name]: "" }));
+    }
+  };
+
   const handleRoleChange = (value: string) => {
     setFormData(prev => ({ ...prev, role: value }));
+    
+    // Update isStudent based on role selection
+    setIsStudent(value === "student");
+    
     if (formErrors.role) {
       setFormErrors(prev => ({ ...prev, role: "" }));
     }
   };
 
-  const validateForm = () => {
+  const validateStep1 = () => {
     let isValid = true;
-    const errors = {
-      username: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
-      role: "",
-      general: "",
-    };
+    const errors = { ...formErrors };
 
-    // Username validation
-    if (!formData.username) {
-      errors.username = "Username is required";
+    // First name validation
+    if (!formData.firstName) {
+      errors.firstName = "First name is required";
       isValid = false;
-    } else if (formData.username.length < 3) {
-      errors.username = "Username must be at least 3 characters";
+    }
+
+    // Last name validation
+    if (!formData.lastName) {
+      errors.lastName = "Last name is required";
       isValid = false;
     }
 
@@ -73,7 +137,49 @@ export default function RegisterPage() {
       errors.email = "Email is required";
       isValid = false;
     } else if (!emailRegex.test(formData.email)) {
-      errors.email = "Please enter a valid email address";
+      errors.email = "Please enter a valid institutional email address";
+      isValid = false;
+    }
+
+    // ID number validation
+    if (!formData.idNumber) {
+      errors.idNumber = "ID number is required";
+      isValid = false;
+    }
+
+    // Role validation - Add role validation to step 1
+    if (!formData.role) {
+      errors.role = "Please select your role";
+      isValid = false;
+    }
+
+    setFormErrors(errors);
+    return isValid;
+  };
+
+  const validateStep2 = () => {
+    let isValid = true;
+    const errors = { ...formErrors };
+
+    // Student-specific validations
+    if (isStudent) {
+      if (!formData.department) {
+        errors.department = "Department is required";
+        isValid = false;
+      }
+      
+      if (!formData.batchYear) {
+        errors.batchYear = "Batch year is required";
+        isValid = false;
+      }
+    }
+
+    // Username validation
+    if (!formData.username) {
+      errors.username = "Username is required";
+      isValid = false;
+    } else if (formData.username.length < 3) {
+      errors.username = "Username must be at least 3 characters";
       isValid = false;
     }
 
@@ -92,40 +198,61 @@ export default function RegisterPage() {
       isValid = false;
     }
 
-    // Role validation
-    if (!formData.role) {
-      errors.role = "Please select a role";
-      isValid = false;
-    }
-
     setFormErrors(errors);
     return isValid;
+  };
+
+  const handleNextStep = () => {
+    if (currentStep === 1 && validateStep1()) {
+      // Now the isStudent state is set based on role selection, not ID
+      setCurrentStep(2);
+    }
+  };
+
+  const handlePrevStep = () => {
+    if (currentStep === 2) {
+      setCurrentStep(1);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) {
+    if (!validateStep2()) {
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // This would be replaced with your actual API call
-      // const response = await fetch('/api/register', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(formData),
-      // });
+      const registrationData = {
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        role: formData.role,
+        idNumber: formData.idNumber,
+        ...(isStudent && {
+          department: formData.department,
+          batchYear: formData.batchYear,
+          isStudent: true
+        })
+      };
+
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(registrationData),
+      });
       
-      // Simulate API call for now
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const data = await response.json();
       
-      // if (!response.ok) throw new Error('Registration failed');
+      if (!response.ok) {
+        throw new Error(data.message || 'Registration failed');
+      }
       
-      // Mock successful registration
-      console.log("Registration successful", formData);
+      console.log("Registration successful", data);
       
       // Redirect to login page
       router.push("/login?registered=true");
@@ -133,7 +260,7 @@ export default function RegisterPage() {
       console.error("Registration error:", error);
       setFormErrors(prev => ({
         ...prev,
-        general: "Registration failed. Please try again."
+        general: error instanceof Error ? error.message : "Registration failed. Please try again."
       }));
     } finally {
       setIsLoading(false);
@@ -146,7 +273,7 @@ export default function RegisterPage() {
       <div className="w-full lg:w-1/2 p-8 md:p-12 xl:p-16 flex flex-col justify-center relative">
         <div className="absolute top-8 left-8 md:top-12 md:left-12 xl:top-16 xl:left-16">
           <Link href="/" className="inline-flex items-center gap-2">
-            <span className="text-2xl font-bold text-primary">BiT PRP</span>
+            <span className="text-2xl font-bold text-primary">PRP</span>
           </Link>
         </div>
         
@@ -165,6 +292,27 @@ export default function RegisterPage() {
             </p>
           </div>
 
+          {/* Step indicator */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between">
+              <div className={`flex items-center ${currentStep === 1 ? 'text-primary' : 'text-gray-400'}`}>
+                <div className={`rounded-full w-8 h-8 flex items-center justify-center border-2 ${currentStep === 1 ? 'border-primary bg-primary/10' : 'border-gray-200'}`}>
+                  1
+                </div>
+                <span className="ml-2 text-sm font-medium">Basic Info</span>
+              </div>
+              
+              <div className="flex-1 h-px bg-gray-200 mx-4"></div>
+              
+              <div className={`flex items-center ${currentStep === 2 ? 'text-primary' : 'text-gray-400'}`}>
+                <div className={`rounded-full w-8 h-8 flex items-center justify-center border-2 ${currentStep === 2 ? 'border-primary bg-primary/10' : 'border-gray-200'}`}>
+                  2
+                </div>
+                <span className="ml-2 text-sm font-medium">Account Setup</span>
+              </div>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-6">
             {formErrors.general && (
               <div className="p-4 bg-red-50 rounded-lg text-red-600 text-sm shadow-sm">
@@ -172,140 +320,293 @@ export default function RegisterPage() {
               </div>
             )}
             
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-gray-700">Username</Label>
-              <Input 
-                id="username"
-                name="username"
-                placeholder="Enter a username"
-                value={formData.username}
-                onChange={handleChange}
-                disabled={isLoading}
-                className={`border-0 bg-gray-50 shadow-sm ${formErrors.username ? "ring-2 ring-red-500" : ""}`}
-              />
-              {formErrors.username && (
-                <p className="text-sm text-red-500">{formErrors.username}</p>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-gray-700">Email address</Label>
-              <Input 
-                id="email"
-                name="email"
-                type="email"
-                placeholder="example@example.com"
-                value={formData.email}
-                onChange={handleChange}
-                disabled={isLoading}
-                className={`border-0 bg-gray-50 shadow-sm ${formErrors.email ? "ring-2 ring-red-500" : ""}`}
-              />
-              {formErrors.email && (
-                <p className="text-sm text-red-500">{formErrors.email}</p>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-gray-700">Password</Label>
-              <Input 
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Create a password"
-                value={formData.password}
-                onChange={handleChange}
-                disabled={isLoading}
-                className={`border-0 bg-gray-50 shadow-sm ${formErrors.password ? "ring-2 ring-red-500" : ""}`}
-              />
-              {formErrors.password && (
-                <p className="text-sm text-red-500">{formErrors.password}</p>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-gray-700">Confirm password</Label>
-              <Input 
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                placeholder="Confirm your password"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                disabled={isLoading}
-                className={`border-0 bg-gray-50 shadow-sm ${formErrors.confirmPassword ? "ring-2 ring-red-500" : ""}`}
-              />
-              {formErrors.confirmPassword && (
-                <p className="text-sm text-red-500">{formErrors.confirmPassword}</p>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-gray-700">Select your role</Label>
-              <RadioGroup 
-                value={formData.role} 
-                onValueChange={handleRoleChange}
-                className="grid grid-cols-2 gap-4"
-              >
-                <div className={`flex items-center space-x-2 border rounded-lg p-3 ${formData.role === 'student' ? 'border-primary bg-primary/5' : 'border-gray-200'}`}>
-                  <RadioGroupItem value="student" id="student" className="sr-only" />
-                  <Label
-                    htmlFor="student"
-                    className="flex flex-col items-center justify-between cursor-pointer w-full"
-                  >
-                    <Users className={`h-6 w-6 mb-1 ${formData.role === 'student' ? 'text-primary' : 'text-gray-400'}`} />
-                    <span className={`text-sm font-medium ${formData.role === 'student' ? 'text-primary' : 'text-gray-500'}`}>Student</span>
-                  </Label>
-                </div>
-                
-                <div className={`flex items-center space-x-2 border rounded-lg p-3 ${formData.role === 'advisor' ? 'border-primary bg-primary/5' : 'border-gray-200'}`}>
-                  <RadioGroupItem value="advisor" id="advisor" className="sr-only" />
-                  <Label
-                    htmlFor="advisor"
-                    className="flex flex-col items-center justify-between cursor-pointer w-full"
-                  >
-                    <BookOpen className={`h-6 w-6 mb-1 ${formData.role === 'advisor' ? 'text-primary' : 'text-gray-400'}`} />
-                    <span className={`text-sm font-medium ${formData.role === 'advisor' ? 'text-primary' : 'text-gray-500'}`}>Advisor</span>
-                  </Label>
-                </div>
-                
-                <div className={`flex items-center space-x-2 border rounded-lg p-3 ${formData.role === 'evaluator' ? 'border-primary bg-primary/5' : 'border-gray-200'}`}>
-                  <RadioGroupItem value="evaluator" id="evaluator" className="sr-only" />
-                  <Label
-                    htmlFor="evaluator"
-                    className="flex flex-col items-center justify-between cursor-pointer w-full"
-                  >
-                    <ClipboardList className={`h-6 w-6 mb-1 ${formData.role === 'evaluator' ? 'text-primary' : 'text-gray-400'}`} />
-                    <span className={`text-sm font-medium ${formData.role === 'evaluator' ? 'text-primary' : 'text-gray-500'}`}>Evaluator</span>
-                  </Label>
-                </div>
-              </RadioGroup>
-              {formErrors.role && (
-                <p className="text-sm text-red-500">{formErrors.role}</p>
-              )}
-              <p className="text-xs text-gray-500 mt-2">Administrator accounts can only be created by system administrators.</p>
-            </div>
-
-            <div className="pt-2">
-              <Button 
-                type="submit" 
-                className="w-full" 
-                disabled={isLoading}
-              >
-                {isLoading ? "Creating account..." : "Create account"}
-              </Button>
-            </div>
-
-            <div className="text-center mt-6">
-              <p className="text-sm text-gray-600">
-                Already have an account?{" "}
-                <Link 
-                  href="/login" 
-                  className="font-medium text-primary hover:text-primary/80 transition-colors"
+            <AnimatePresence mode="wait">
+              {currentStep === 1 && (
+                <motion.div
+                  key="step1"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                  className="space-y-6"
                 >
-                  Sign in
-                </Link>
-              </p>
-            </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="firstName" className="text-gray-700">First Name</Label>
+                      <Input 
+                        id="firstName"
+                        name="firstName"
+                        placeholder="Enter your first name"
+                        value={formData.firstName}
+                        onChange={handleChange}
+                        disabled={isLoading}
+                        className={`border-0 bg-gray-50 shadow-sm ${formErrors.firstName ? "ring-2 ring-red-500" : ""}`}
+                      />
+                      {formErrors.firstName && (
+                        <p className="text-sm text-red-500">{formErrors.firstName}</p>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName" className="text-gray-700">Last Name</Label>
+                      <Input 
+                        id="lastName"
+                        name="lastName"
+                        placeholder="Enter your last name"
+                        value={formData.lastName}
+                        onChange={handleChange}
+                        disabled={isLoading}
+                        className={`border-0 bg-gray-50 shadow-sm ${formErrors.lastName ? "ring-2 ring-red-500" : ""}`}
+                      />
+                      {formErrors.lastName && (
+                        <p className="text-sm text-red-500">{formErrors.lastName}</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-gray-700">Institutional Email</Label>
+                    <Input 
+                      id="email"
+                      name="email"
+                      type="email"
+                      placeholder="your.name@institution.edu"
+                      value={formData.email}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                      className={`border-0 bg-gray-50 shadow-sm ${formErrors.email ? "ring-2 ring-red-500" : ""}`}
+                    />
+                    {formErrors.email && (
+                      <p className="text-sm text-red-500">{formErrors.email}</p>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="idNumber" className="text-gray-700">ID Number</Label>
+                    <Input 
+                      id="idNumber"
+                      name="idNumber"
+                      placeholder="Enter your institutional ID"
+                      value={formData.idNumber}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                      className={`border-0 bg-gray-50 shadow-sm ${formErrors.idNumber ? "ring-2 ring-red-500" : ""}`}
+                    />
+                    {formErrors.idNumber && (
+                      <p className="text-sm text-red-500">{formErrors.idNumber}</p>
+                    )}
+                  </div>
+
+                  {/* Add role selection */}
+                  <div className="space-y-3">
+                    <Label className="text-gray-700">Select your role</Label>
+                    <RadioGroup 
+                      value={formData.role} 
+                      onValueChange={handleRoleChange}
+                      className="grid grid-cols-2 gap-4"
+                    >
+                      <div className={`flex items-center space-x-2 border rounded-lg p-3 ${formData.role === 'student' ? 'border-primary bg-primary/5' : 'border-gray-200'}`}>
+                        <RadioGroupItem value="student" id="student" className="sr-only" />
+                        <Label htmlFor="student" className="flex flex-col items-center gap-1 cursor-pointer p-2 w-full">
+                          <GraduationCap className="h-5 w-5 mb-1" />
+                          <span className="font-medium">Student</span>
+                          <span className="text-xs text-gray-500">I am a student</span>
+                        </Label>
+                      </div>
+                      
+                      <div className={`flex items-center space-x-2 border rounded-lg p-3 ${formData.role === 'advisor' ? 'border-primary bg-primary/5' : 'border-gray-200'}`}>
+                        <RadioGroupItem value="advisor" id="advisor" className="sr-only" />
+                        <Label htmlFor="advisor" className="flex flex-col items-center gap-1 cursor-pointer p-2 w-full">
+                          <UserCog className="h-5 w-5 mb-1" />
+                          <span className="font-medium">Advisor</span>
+                          <span className="text-xs text-gray-500">I am an advisor</span>
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                    {formErrors.role && (
+                      <p className="text-sm text-red-500">{formErrors.role}</p>
+                    )}
+                  </div>
+
+                  <Button 
+                    type="button" 
+                    className="w-full flex items-center justify-center gap-2"
+                    onClick={handleNextStep}
+                    disabled={isLoading}
+                  >
+                    Next Step
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </motion.div>
+              )}
+
+              {currentStep === 2 && (
+                <motion.div
+                  key="step2"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.3 }}
+                  className="space-y-6"
+                >
+                  {isStudent && (
+                    <div className="space-y-4">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm">
+                        <School className="h-4 w-4" />
+                        <span>Student Account</span>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="department" className="text-gray-700">Department</Label>
+                        <Select
+                          value={formData.department}
+                          onValueChange={(value) => handleSelectChange("department", value)}
+                        >
+                          <SelectTrigger 
+                            className={`border border-gray-200 bg-white shadow-sm ${formErrors.department ? "ring-2 ring-red-500" : ""}`}
+                            id="department"
+                          >
+                            <SelectValue placeholder="Select your department" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white border border-gray-200 shadow-md z-50">
+                            {departments.map((dept) => (
+                              <SelectItem key={dept} value={dept}>
+                                {dept}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {formErrors.department && (
+                          <p className="text-sm text-red-500">{formErrors.department}</p>
+                        )}
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="batchYear" className="text-gray-700">Batch Year</Label>
+                        <Select
+                          value={formData.batchYear}
+                          onValueChange={(value) => handleSelectChange("batchYear", value)}
+                        >
+                          <SelectTrigger 
+                            className={`border border-gray-200 bg-white shadow-sm ${formErrors.batchYear ? "ring-2 ring-red-500" : ""}`}
+                            id="batchYear"
+                          >
+                            <SelectValue placeholder="Select your batch year" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white border border-gray-200 shadow-md z-50">
+                            {generateBatchYears().map((year) => (
+                              <SelectItem key={year} value={year.toString()}>
+                                {year} Batch
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {formErrors.batchYear && (
+                          <p className="text-sm text-red-500">{formErrors.batchYear}</p>
+                        )}
+                      </div>
+                      
+                      <Separator className="my-2" />
+                    </div>
+                  )}
+                  
+                  {!isStudent && (
+                    <div className="space-y-4">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm">
+                        <UserCog className="h-4 w-4" />
+                        <span>Advisor Account</span>
+                      </div>
+                      <Separator className="my-2" />
+                    </div>
+                  )}
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="username" className="text-gray-700">Username</Label>
+                    <Input 
+                      id="username"
+                      name="username"
+                      placeholder="Enter a username"
+                      value={formData.username}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                      className={`border-0 bg-gray-50 shadow-sm ${formErrors.username ? "ring-2 ring-red-500" : ""}`}
+                    />
+                    {formErrors.username && (
+                      <p className="text-sm text-red-500">{formErrors.username}</p>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-gray-700">Password</Label>
+                    <Input 
+                      id="password"
+                      name="password"
+                      type="password"
+                      placeholder="Create a password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                      className={`border-0 bg-gray-50 shadow-sm ${formErrors.password ? "ring-2 ring-red-500" : ""}`}
+                    />
+                    {formErrors.password && (
+                      <p className="text-sm text-red-500">{formErrors.password}</p>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword" className="text-gray-700">Confirm password</Label>
+                    <Input 
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type="password"
+                      placeholder="Confirm your password"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                      className={`border-0 bg-gray-50 shadow-sm ${formErrors.confirmPassword ? "ring-2 ring-red-500" : ""}`}
+                    />
+                    {formErrors.confirmPassword && (
+                      <p className="text-sm text-red-500">{formErrors.confirmPassword}</p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col space-y-3">
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={isLoading}
+                    >
+                      {isLoading ? "Creating account..." : "Create account"}
+                    </Button>
+                    
+                    <Button 
+                      type="button" 
+                      variant="outline"
+                      className="w-full flex items-center justify-center gap-2"
+                      onClick={handlePrevStep}
+                      disabled={isLoading}
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Back
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {currentStep === 1 && (
+              <div className="text-center mt-6">
+                <p className="text-sm text-gray-600">
+                  Already have an account?{" "}
+                  <Link 
+                    href="/login" 
+                    className="font-medium text-primary hover:text-primary/80 transition-colors"
+                  >
+                    Sign in
+                  </Link>
+                </p>
+              </div>
+            )}
           </form>
         </motion.div>
       </div>
