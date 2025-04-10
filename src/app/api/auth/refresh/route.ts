@@ -1,42 +1,20 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
+import { PrismaClient } from '@/generated/prisma';
 import { UserRole, UserPermission } from '@/lib/auth';
+import { cookies } from 'next/headers';
 
+const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-development-secret';
 const JWT_EXPIRES_IN = '1h';
 const REFRESH_TOKEN_EXPIRES_IN = '7d';
 
-// Mock user data for demonstration (in production this would be fetched from a database)
-const MOCK_USERS = [
-  {
-    id: 1,
-    email: 'admin@example.com',
-    roleId: 1,
-  },
-  {
-    id: 2,
-    email: 'student@example.com',
-    roleId: 2,
-  },
-  {
-    id: 3,
-    email: 'advisor@example.com',
-    roleId: 3,
-  }
-];
-
-// Mock role data (replace with actual roles from database)
-const MOCK_ROLES: Record<number, UserRole> = {
-  1: { id: 1, name: 'admin' },
-  2: { id: 2, name: 'student' },
-  3: { id: 3, name: 'advisor' },
-  4: { id: 4, name: 'evaluator' }
-};
-
-// Mock permissions data (replace with actual permissions from database)
-const MOCK_PERMISSIONS: Record<number, UserPermission[]> = {
-  1: [{ action: 'manage', subject: 'all' }],
-  2: [
+// Define permission mapping for roles
+const ROLE_PERMISSIONS: Record<string, UserPermission[]> = {
+  'admin': [
+    { action: 'manage', subject: 'all' }
+  ],
+  'user': [
     { action: 'read', subject: 'project' },
     { action: 'create', subject: 'project' },
     { action: 'update', subject: 'project' },
@@ -44,14 +22,29 @@ const MOCK_PERMISSIONS: Record<number, UserPermission[]> = {
     { action: 'create', subject: 'task' },
     { action: 'update', subject: 'task' }
   ],
-  3: [
+  'student': [
+    { action: 'read', subject: 'project' },
+    { action: 'create', subject: 'project' },
+    { action: 'update', subject: 'project' },
+    { action: 'read', subject: 'task' },
+    { action: 'create', subject: 'task' },
+    { action: 'update', subject: 'task' }
+  ],
+  'developer': [
     { action: 'read', subject: 'project' },
     { action: 'update', subject: 'project' },
     { action: 'read', subject: 'task' },
     { action: 'create', subject: 'feedback' },
     { action: 'read', subject: 'report' }
   ],
-  4: [
+  'advisor': [
+    { action: 'read', subject: 'project' },
+    { action: 'update', subject: 'project' },
+    { action: 'read', subject: 'task' },
+    { action: 'create', subject: 'feedback' },
+    { action: 'read', subject: 'report' }
+  ],
+  'evaluator': [
     { action: 'read', subject: 'project' },
     { action: 'evaluate', subject: 'project' },
     { action: 'read', subject: 'report' },
@@ -61,7 +54,22 @@ const MOCK_PERMISSIONS: Record<number, UserPermission[]> = {
 
 export async function POST(request: Request) {
   try {
-    const { refreshToken } = await request.json();
+    // Get refresh token from request
+    let refreshToken: string | undefined;
+    
+    // First try to get token from request body
+    try {
+      const body = await request.json();
+      refreshToken = body.refreshToken;
+    } catch (e) {
+      // Request body might not be valid JSON or might not exist
+    }
+    
+    // If no token in body, try to get from cookies
+    if (!refreshToken) {
+      const cookieStore = cookies();
+      refreshToken = cookieStore.get('prp_refresh_token')?.value;
+    }
 
     if (!refreshToken) {
       return NextResponse.json(
@@ -84,8 +92,13 @@ export async function POST(request: Request) {
     // Get user ID from token
     const userId = parseInt(decoded.sub, 10);
 
-    // Find user (in production, this would query your database)
-    const user = MOCK_USERS.find(u => u.id === userId);
+    // Find user in database
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        role: true
+      }
+    });
 
     if (!user) {
       return NextResponse.json(
@@ -94,16 +107,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get user role and permissions
-    const role = MOCK_ROLES[user.roleId];
-    const permissions = MOCK_PERMISSIONS[user.roleId] || [];
+    // Get role name and permissions
+    const roleName = user.role.roleName;
+    const permissions = ROLE_PERMISSIONS[roleName] || [];
 
     // Create new JWT payload
     const payload = {
       sub: user.id.toString(),
       email: user.email,
       userId: user.id,
-      role,
+      role: {
+        id: user.roleId,
+        name: roleName
+      },
       permissions,
     };
 
@@ -119,16 +135,38 @@ export async function POST(request: Request) {
       { expiresIn: REFRESH_TOKEN_EXPIRES_IN }
     );
 
-    // Return tokens
-    return NextResponse.json({
+    // Create response
+    const response = NextResponse.json({
       accessToken,
       refreshToken: newRefreshToken,
     });
+    
+    // Set access token cookie (HTTP only for security)
+    response.cookies.set('prp_access_token', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60, // 1 hour
+      path: '/',
+      sameSite: 'strict'
+    });
+    
+    // Set refresh token cookie (HTTP only for security)
+    response.cookies.set('prp_refresh_token', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/',
+      sameSite: 'strict'
+    });
+
+    return response;
   } catch (error) {
     console.error('Token refresh error:', error);
     return NextResponse.json(
       { message: 'Internal server error' },
       { status: 500 }
     );
+  } finally {
+    await prisma.$disconnect();
   }
 } 

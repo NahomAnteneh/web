@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@/generated/prisma';
 import * as bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { cookies } from 'next/headers';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-development-secret';
@@ -98,8 +99,8 @@ export async function POST(request: Request) {
       { expiresIn: REFRESH_TOKEN_EXPIRES_IN }
     );
 
-    // Return tokens
-    return NextResponse.json({
+    // Create response
+    const response = NextResponse.json({
       accessToken,
       refreshToken,
       user: {
@@ -111,6 +112,26 @@ export async function POST(request: Request) {
         role: roleName,
       },
     });
+    
+    // Set access token cookie (HTTP only for security)
+    response.cookies.set('prp_access_token', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60, // 1 hour
+      path: '/',
+      sameSite: 'strict'
+    });
+    
+    // Set refresh token cookie (HTTP only for security)
+    response.cookies.set('prp_refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/',
+      sameSite: 'strict'
+    });
+
+    return response;
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(

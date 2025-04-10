@@ -170,10 +170,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // Logout function
-  const logout = () => {
-    clearTokens();
-    setUser(null);
-    router.push('/login');
+  const logout = async () => {
+    try {
+      // Call logout endpoint to clear cookies
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear local storage tokens regardless of API success
+      clearTokens();
+      setUser(null);
+      router.push('/login');
+    }
   };
 
   // Check if user has specific role
