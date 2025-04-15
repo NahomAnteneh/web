@@ -1,3 +1,5 @@
+// TODO: We need to check if the user or the group exists before rendering anything else render 404 not found. if found check if it is a user or a group and render the pages accordingly
+
 "use client";
 
 import { useState, useEffect } from "react";
